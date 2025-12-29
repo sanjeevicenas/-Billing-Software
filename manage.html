@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | Restaurant Billing</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+    <div class="admin-container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+            <h1 class="brand" style="margin: 0;">Admin Dashboard</h1>
+            <div>
+                <button onclick="admin.logout()" class="btn btn-outline"
+                    style="margin-right: 10px; border-color: var(--danger); color: var(--danger);">
+                    Logout
+                </button>
+                <a href="index.html" class="btn btn-outline" style="font-size: 14px;">
+                    &larr; Back to POS
+                </a>
+            </div>
+        </div>
+
+        <div class="admin-nav">
+            <div class="nav-tab active" onclick="admin.switchTab('menu')">Menu Management</div>
+            <div class="nav-tab" onclick="admin.switchTab('sales')">Sales Report</div>
+        </div>
+
+        <!-- Menu Section -->
+        <div id="tab-menu" class="admin-section active">
+            <h2 style="margin-bottom: 20px;">Manage Menu Items</h2>
+
+            <div
+                style="background: var(--bg-card); padding: 20px; border-radius: var(--radius-md); margin-bottom: 30px;">
+                <h3 style="margin-bottom: 15px; font-size: 16px;">Add / Edit Item</h3>
+                <form id="menu-form" onsubmit="event.preventDefault(); admin.saveItem();">
+                    <input type="hidden" id="item-id">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div class="form-group">
+                            <label class="form-label">Item Name</label>
+                            <input type="text" id="item-name" class="form-input" required
+                                placeholder="e.g. Chicken Biryani">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Price (₹)</label>
+                            <input type="number" id="item-price" class="form-input" required placeholder="e.g. 250">
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div class="form-group">
+                            <label class="form-label">Category</label>
+                            <select id="item-category" class="form-input">
+                                <option value="Main Course">Main Course</option>
+                                <option value="Starters">Starters</option>
+                                <option value="Breads">Breads</option>
+                                <option value="Beverages">Beverages</option>
+                                <option value="Desserts">Desserts</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Image URL</label>
+                            <input type="url" id="item-image" class="form-input" placeholder="https://..." required>
+                        </div>
+                    </div>
+
+                    <div style="text-align: right; margin-top: 10px;">
+                        <button type="button" onclick="admin.resetForm()" class="btn btn-outline"
+                            style="margin-right: 10px;">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Item</button>
+                    </div>
+                </form>
+            </div>
+
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th width="60">Img</th>
+                        <th>Name</th>
+                        <th>Category</th>
+                        <th>Price</th>
+                        <th style="text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="menu-table-body">
+                    <!-- Menu items loaded here -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Sales Section -->
+        <div id="tab-sales" class="admin-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0;">Sales Overview</h2>
+                <button onclick="admin.downloadCSV()" class="btn btn-success" style="font-size: 14px;">
+                    Download CSV
+                </button>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 30px;">
+                <div
+                    style="background: linear-gradient(135deg, #6c5ce7, #a29bfe); padding: 25px; border-radius: var(--radius-md); color: white;">
+                    <div style="font-size: 14px; opacity: 0.9;">Total Revenue (All Time)</div>
+                    <div style="font-size: 32px; font-weight: 800; margin-top: 5px;" id="total-revenue">₹0.00</div>
+                </div>
+                <div
+                    style="background: var(--bg-card); padding: 25px; border-radius: var(--radius-md); border: 1px solid var(--border);">
+                    <div style="font-size: 14px; color: var(--text-secondary);">Orders Count</div>
+                    <div style="font-size: 32px; font-weight: 800; margin-top: 5px; color: var(--text-primary);"
+                        id="total-orders">0</div>
+                </div>
+            </div>
+
+            <h3 style="margin-bottom: 15px; margin-top: 30px;">Recent Transactions</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Order ID</th>
+                        <th>Date</th>
+                        <th>Items</th>
+                        <th style="text-align: right;">Total</th>
+                    </tr>
+                </thead>
+                <tbody id="sales-table-body">
+                    <!-- Sales loaded here -->
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <script src="data.js"></script>
+    <script src="admin.js"></script>
+</body>
+
+</html>
