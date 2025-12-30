@@ -169,6 +169,7 @@ const admin = {
             <tr>
                 <td style="font-family: monospace;">${order.id.slice(0, 8)}...</td>
                 <td>${new Date(order.timestamp).toLocaleString()}</td>
+                <td style="font-size: 13px; color: var(--text-secondary);">${order.createdBy || '-'}</td>
                 <td>
                     ${order.items.map(i => `<div style="font-size: 13px;">${i.qty}x ${i.item.name}</div>`).join('')}
                 </td>
@@ -186,19 +187,20 @@ const admin = {
 
         // CSV Headers
         let csvContent = "data:text/csv;charset=utf-8,";
-        csvContent += "Order ID,Date,Time,Items,Total Amount (INR)\n";
+        csvContent += "Order ID,Date,Time,Sold By,Items,Total Amount (INR)\n";
 
         // CSV Rows
         orders.forEach(order => {
             const dateObj = new Date(order.timestamp);
             const date = dateObj.toLocaleDateString();
             const time = dateObj.toLocaleTimeString();
+            const soldBy = order.createdBy || 'Unknown';
 
             // Format items
             const itemsString = order.items.map(i => `${i.qty}x ${i.item.name}`).join(' | ');
             const safeItems = `"${itemsString.replace(/"/g, '""')}"`;
 
-            const row = `${order.id},${date},${time},${safeItems},${order.total}`;
+            const row = `${order.id},${date},${time},${soldBy},${safeItems},${order.total}`;
             csvContent += row + "\n";
         });
 

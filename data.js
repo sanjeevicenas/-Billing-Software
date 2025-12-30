@@ -144,10 +144,12 @@ const DataManager = {
     },
 
     // Orders
-    async saveOrder(order) {
+    async saveOrder(order, userInfo = {}) {
         const orderData = {
             timestamp: new Date().toISOString(),
             status: 'completed', // or 'pending' if we had a kitchen view
+            createdBy: userInfo.email || 'Unknown',
+            userId: userInfo.uid || 'anonymous',
             ...order
         };
         const docRef = await addDoc(collection(db, 'orders'), orderData);

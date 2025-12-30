@@ -202,7 +202,11 @@ const app = {
         };
 
         try {
-            const savedOrder = await window.DataManager.saveOrder(order);
+            // Get Current User Info
+            const user = auth.currentUser;
+            const userInfo = user ? { email: user.email, uid: user.uid } : { email: 'Unknown', uid: 'anon' };
+
+            const savedOrder = await window.DataManager.saveOrder(order, userInfo);
 
             // Prepare Receipt
             this.prepareReceipt(savedOrder);
