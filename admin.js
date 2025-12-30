@@ -1,19 +1,44 @@
 /**
- * Admin Dashboard Logic
+ * Admin Dashboard Logic - Using Firestore
  */
 
-// Auth Check
-if (localStorage.getItem('restaurant_app_auth') !== 'true') {
-    window.location.href = 'login.html';
-}
+import { auth, onAuthStateChanged, signOut } from './firebase-config.js';
+
+// Auth Check (Async)
+onAuthStateChanged(auth, (user) => {
+    if (!user) {
+        window.location.href = 'login.html';
+    }
+});
 
 const admin = {
-    init() {
+    // Current Sales Data Cache
+    ordersCache: [],
+
+    async init() {
+        console.log("Admin Init");
+        // Wait for DataManager to sync
+        if (window.DataManager) {
+            await window.DataManager.init();
+        }
+
         this.renderMenuTable();
+
+        // Start Live Sales Listener
+        if (window.DataManager.subscribeOrders) {
+            window.DataManager.subscribeOrders((orders) => {
+                this.ordersCache = orders;
+                // If sales tab is active, re-render
+                if (document.getElementById('tab-sales').classList.contains('active')) {
+                    this.renderSales();
+                }
+            });
+        }
     },
 
-    logout() {
+    async logout() {
         if (confirm('Are you sure you want to logout?')) {
+            await signOut(auth);
             localStorage.removeItem('restaurant_app_auth');
             window.location.href = 'login.html';
         }
@@ -23,7 +48,9 @@ const admin = {
         document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
 
-        event.target.classList.add('active');
+        // Handle event.target safety
+        const target = event.target.closest('.nav-tab') || event.target;
+        target.classList.add('active');
         document.getElementById(`tab-${tabName}`).classList.add('active');
 
         if (tabName === 'sales') {
@@ -36,15 +63,22 @@ const admin = {
     // --- Menu Management ---
 
     renderMenuTable() {
-        const menu = DataManager.getMenu();
+        const menu = window.DataManager.getMenu();
         const tbody = document.getElementById('menu-table-body');
+
+        if (!tbody) return;
+
+        if (menu.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center">Loading items...</td></tr>`;
+            return;
+        }
 
         tbody.innerHTML = menu.map(item => `
             <tr>
                 <td><img src="${item.image}" style="width: 40px; height: 40px; border-radius: 4px; object-fit: cover;"></td>
                 <td style="font-weight: 500;">${item.name}</td>
                 <td style="color: var(--text-secondary);">${item.category}</td>
-                <td>${DataManager.formatCurrency(item.price)}</td>
+                <td>${window.DataManager.formatCurrency(item.price)}</td>
                 <td style="text-align: right;">
                     <button onclick="admin.editItem('${item.id}')" class="btn btn-outline" style="padding: 6px 10px; margin-right: 5px;">Edit</button>
                     <button onclick="admin.deleteItem('${item.id}')" class="btn btn-danger" style="padding: 6px 10px;">Delete</button>
@@ -53,27 +87,41 @@ const admin = {
         `).join('');
     },
 
-    saveItem() {
-        const id = document.getElementById('item-id').value;
-        const item = {
-            name: document.getElementById('item-name').value,
-            price: parseFloat(document.getElementById('item-price').value),
-            category: document.getElementById('item-category').value,
-            image: document.getElementById('item-image').value
-        };
+    async saveItem() {
+        const submitBtn = document.querySelector('#menu-form button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Saving...';
 
-        if (id) {
-            DataManager.updateMenuItem(id, item);
-        } else {
-            DataManager.addMenuItem(item);
+        try {
+            const id = document.getElementById('item-id').value;
+            const item = {
+                name: document.getElementById('item-name').value,
+                price: parseFloat(document.getElementById('item-price').value),
+                category: document.getElementById('item-category').value,
+                image: document.getElementById('item-image').value
+            };
+
+            if (id) {
+                await window.DataManager.updateMenuItem(id, item);
+            } else {
+                await window.DataManager.addMenuItem(item);
+            }
+
+            this.resetForm();
+            // renderMenuTable is handled by onSnapshot in DataManager automatically!
+            // But we can call it to be safe or show immediate feedback.
+
+        } catch (e) {
+            console.error(e);
+            alert("Error saving item");
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Save Item';
         }
-
-        this.resetForm();
-        this.renderMenuTable();
     },
 
     editItem(id) {
-        const menu = DataManager.getMenu();
+        const menu = window.DataManager.getMenu();
         const item = menu.find(i => i.id === id);
         if (!item) return;
 
@@ -86,10 +134,10 @@ const admin = {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     },
 
-    deleteItem(id) {
+    async deleteItem(id) {
         if (confirm('Delete this item?')) {
-            DataManager.deleteMenuItem(id);
-            this.renderMenuTable();
+            // Optimistic UI or wait?
+            await window.DataManager.deleteMenuItem(id);
         }
     },
 
@@ -101,11 +149,12 @@ const admin = {
     // --- Sales Reporting ---
 
     renderSales() {
-        const orders = DataManager.getOrders().reverse(); // Newest first
+        // Use ordersCache populated by realtime listener
+        const orders = this.ordersCache;
 
         // Metrics
         const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
-        document.getElementById('total-revenue').textContent = DataManager.formatCurrency(totalRevenue);
+        document.getElementById('total-revenue').textContent = window.DataManager.formatCurrency(totalRevenue);
         document.getElementById('total-orders').textContent = orders.length;
 
         // Table
@@ -123,13 +172,13 @@ const admin = {
                 <td>
                     ${order.items.map(i => `<div style="font-size: 13px;">${i.qty}x ${i.item.name}</div>`).join('')}
                 </td>
-                <td style="text-align: right; font-weight: 600;">${DataManager.formatCurrency(order.total)}</td>
+                <td style="text-align: right; font-weight: 600;">${window.DataManager.formatCurrency(order.total)}</td>
             </tr>
         `).join('');
     },
 
     downloadCSV() {
-        const orders = DataManager.getOrders();
+        const orders = this.ordersCache;
         if (orders.length === 0) {
             alert('No sales data to export.');
             return;
@@ -145,10 +194,8 @@ const admin = {
             const date = dateObj.toLocaleDateString();
             const time = dateObj.toLocaleTimeString();
 
-            // Format items as a single string e.g. "2x Burger | 1x Coke"
+            // Format items
             const itemsString = order.items.map(i => `${i.qty}x ${i.item.name}`).join(' | ');
-
-            // Escape quotes and commas in itemsString to prevent CSV breakage
             const safeItems = `"${itemsString.replace(/"/g, '""')}"`;
 
             const row = `${order.id},${date},${time},${safeItems},${order.total}`;
@@ -165,6 +212,9 @@ const admin = {
         document.body.removeChild(link);
     }
 };
+
+// Expose admin to global
+window.admin = admin;
 
 // Start
 document.addEventListener('DOMContentLoaded', () => {

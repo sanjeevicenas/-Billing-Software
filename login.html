@@ -72,47 +72,63 @@
         </div>
     </div>
 
-    <script>
-        // Secure Auth Logic
-        async function handleLogin() {
-            const user = document.getElementById('username').value;
+    <!-- Module type required for firebase imports -->
+    <script type="module">
+        import { auth, signInWithEmailAndPassword, onAuthStateChanged } from './firebase-config.js';
+
+        // Check if already logged in
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // User is signed in
+                localStorage.setItem('restaurant_app_auth', 'true'); // Keep local flag for legacy compatibility if needed
+                window.location.href = 'index.html';
+            }
+        });
+
+        // Expose handleLogin to global scope because it's called by onsubmit
+        window.handleLogin = async function () {
+            const userEmail = document.getElementById('username').value; // Treating username as email for now, or append domain
+            let email = userEmail;
+
+            // Auto-append domain if user just types "admin" (Convenience)
+            if (!email.includes('@')) {
+                email = email + '@nissipos.com';
+            }
+
             const pass = document.getElementById('password').value;
             const errorMsg = document.getElementById('error-msg');
             const submitBtn = document.querySelector('button[type="submit"]');
 
-            // Hash for 'admin123'
-            const TARGET_HASH = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9';
-
             try {
                 submitBtn.disabled = true;
+                submitBtn.textContent = 'Logging in...';
+                errorMsg.style.display = 'none';
 
-                // Generate Hash
-                const msgBuffer = new TextEncoder().encode(pass);
-                const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-                const hashArray = Array.from(new Uint8Array(hashBuffer));
-                const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                // Firebase Login
+                await signInWithEmailAndPassword(auth, email, pass);
 
-                if (user === 'admin' && hashHex === TARGET_HASH) {
-                    localStorage.setItem('restaurant_app_auth', 'true');
-                    window.location.href = 'index.html';
-                } else {
-                    throw new Error('Invalid Credentials');
-                }
-            } catch (e) {
+                // Redirect handled by onAuthStateChanged
+
+            } catch (error) {
+                console.error("Login Error:", error);
                 submitBtn.disabled = false;
+                submitBtn.textContent = 'Login';
+
+                // Show friendly error message
+                errorMsg.textContent = "Invalid Email or Password";
+                if (error.code === 'auth/too-many-requests') {
+                    errorMsg.textContent = "Too many failed attempts. Try again later.";
+                }
+
                 errorMsg.style.display = 'block';
+
                 // Shake effect
                 const card = document.querySelector('.login-card');
                 card.style.transform = 'translateX(10px)';
                 setTimeout(() => card.style.transform = 'translateX(-10px)', 100);
                 setTimeout(() => card.style.transform = 'translate(0)', 200);
             }
-        }
-
-        // Redirect if already logged in
-        if (localStorage.getItem('restaurant_app_auth') === 'true') {
-            window.location.href = 'index.html';
-        }
+        };
     </script>
 </body>
 

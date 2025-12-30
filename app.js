@@ -1,11 +1,8 @@
 /**
- * POS Application Logic
+ * POS Application Logic - Firebase Enabled
  */
 
-// Auth Check
-if (localStorage.getItem('restaurant_app_auth') !== 'true') {
-    window.location.href = 'login.html';
-}
+import { auth, onAuthStateChanged, signOut } from './firebase-config.js';
 
 const app = {
     state: {
@@ -13,17 +10,52 @@ const app = {
         currentOrderTotal: 0
     },
 
-    logout() {
-        if (confirm('Are you sure you want to logout?')) {
-            localStorage.removeItem('restaurant_app_auth');
-            window.location.href = 'login.html';
-        }
+    init() {
+        // Start clock immediately
+        this.startClock();
+
+        // Setup Auth Listener
+        // We only initialize Data components when we are SURE the user is logged in
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                // Not logged in, redirect
+                window.location.href = 'login.html';
+            } else {
+                console.log("User authenticated:", user.email);
+
+                // Initialize DataManager only after Auth is confirmed
+                if (window.DataManager && !window.DataManager.initialized) {
+                    try {
+                        window.DataManager.initialized = true; // Prevent double init
+                        await window.DataManager.init();
+                    } catch (e) {
+                        console.error("DataManager init failed", e);
+                    } finally {
+                        // Always try to render, even if empty, so we don't just show blank
+                        this.renderMenu();
+                        this.renderCart();
+                    }
+                }
+            }
+        });
     },
 
-    init() {
-        this.renderMenu();
-        this.renderCart();
-        this.startClock();
+    // checkAuth is now merged into init, keeping this empty or removing it if unused by others
+    checkAuth() {
+        // Legacy: Left for reference or if manually called, but init handles it now.
+    },
+
+    async logout() {
+        if (confirm('Are you sure you want to logout?')) {
+            try {
+                await signOut(auth);
+                localStorage.removeItem('restaurant_app_auth');
+                window.location.href = 'login.html';
+            } catch (error) {
+                console.error("Logout failed", error);
+                alert("Logout failed: " + error.message);
+            }
+        }
     },
 
     startClock() {
@@ -45,22 +77,28 @@ const app = {
     },
 
     renderMenu() {
-        const menu = DataManager.getMenu();
+        // DataManager is now populated by Firestore listener
+        const menu = window.DataManager.getMenu();
         const grid = document.getElementById('menu-grid');
+
+        if (menu.length === 0) {
+            grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center;">Loading Menu...</div>';
+            return;
+        }
 
         grid.innerHTML = menu.map(item => `
             <div class="menu-card" onclick="app.addToCart('${item.id}')">
                 <img src="${item.image}" alt="${item.name}" class="card-img">
                 <div class="card-content">
                     <div class="card-title">${item.name}</div>
-                    <div class="card-price">${DataManager.formatCurrency(item.price)}</div>
+                    <div class="card-price">${window.DataManager.formatCurrency(item.price)}</div>
                 </div>
             </div>
         `).join('');
     },
 
     addToCart(itemId) {
-        const menu = DataManager.getMenu();
+        const menu = window.DataManager.getMenu();
         const item = menu.find(i => i.id === itemId);
 
         if (!item) return;
@@ -115,7 +153,7 @@ const app = {
             <div class="cart-item">
                 <div class="item-info">
                     <h4>${item.name}</h4>
-                    <span class="price">${DataManager.formatCurrency(item.price * qty)}</span>
+                    <span class="price">${window.DataManager.formatCurrency(item.price * qty)}</span>
                 </div>
                 <div class="item-controls">
                     <button class="qty-btn" onclick="event.stopPropagation(); app.updateQty('${item.id}', -1)">-</button>
@@ -133,9 +171,9 @@ const app = {
         const total = subtotal;
         this.state.currentOrderTotal = total;
 
-        document.getElementById('subtotal').textContent = DataManager.formatCurrency(subtotal);
-        document.getElementById('total').textContent = DataManager.formatCurrency(total);
-        document.getElementById('payment-total').textContent = DataManager.formatCurrency(total);
+        document.getElementById('subtotal').textContent = window.DataManager.formatCurrency(subtotal);
+        document.getElementById('total').textContent = window.DataManager.formatCurrency(total);
+        document.getElementById('payment-total').textContent = window.DataManager.formatCurrency(total);
     },
 
     initiatePayment() {
@@ -153,7 +191,7 @@ const app = {
         document.getElementById('payment-modal').classList.remove('active');
     },
 
-    confirmPayment() {
+    async confirmPayment() {
         // Safe check
         if (this.state.cart.length === 0) return;
 
@@ -163,40 +201,46 @@ const app = {
             paymentMethod: 'QR Scan'
         };
 
-        const savedOrder = DataManager.saveOrder(order);
+        try {
+            const savedOrder = await window.DataManager.saveOrder(order);
 
-        // Prepare Receipt
-        this.prepareReceipt(savedOrder);
+            // Prepare Receipt
+            this.prepareReceipt(savedOrder);
 
-        // Close Modal and Print
-        this.cancelPayment();
+            // Close Modal and Print
+            this.cancelPayment();
 
-        // Change title for PDF filename
-        const originalTitle = document.title;
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-        document.title = `Receipt_${timestamp}`;
+            // Change title for PDF filename
+            const originalTitle = document.title;
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            document.title = `Receipt_${timestamp}`;
 
-        setTimeout(() => {
-            window.print();
+            setTimeout(() => {
+                window.print();
 
-            // Restore title
-            document.title = originalTitle;
+                // Restore title
+                document.title = originalTitle;
 
-            // Clear cart after print dialog closes (simulated by timeout, or just immediately)
-            this.state.cart = [];
-            this.renderCart();
-        }, 500);
+                // Clear cart after print dialog closes
+                this.state.cart = [];
+                this.renderCart();
+            }, 500);
+
+        } catch (e) {
+            console.error("Payment failed", e);
+            alert("Could not save order. Internet connection?");
+        }
     },
 
     prepareReceipt(order) {
         document.getElementById('receipt-date').textContent = new Date(order.timestamp).toLocaleString();
         document.getElementById('receipt-id').textContent = order.id.slice(0, 8);
-        document.getElementById('receipt-total').textContent = DataManager.formatCurrency(order.total);
+        document.getElementById('receipt-total').textContent = window.DataManager.formatCurrency(order.total);
 
         const itemsHtml = order.items.map(({ item, qty }) => `
             <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
                 <span>${qty} x ${item.name}</span>
-                <span>${DataManager.formatCurrency(item.price * qty)}</span>
+                <span>${window.DataManager.formatCurrency(item.price * qty)}</span>
             </div>
         `).join('');
 
@@ -204,7 +248,10 @@ const app = {
     }
 };
 
-// Start
+// Expose to window for HTML onclick handlers
+window.app = app;
+
+// Init
 document.addEventListener('DOMContentLoaded', () => {
     app.init();
 });

@@ -1,17 +1,13 @@
 /**
- * Data Management Module
- * Handles localStorage interactions for Menu and Orders
+ * Data Management Module - FIRESTORE EDITION
+ * Handles Firestore interactions for Menu and Orders
  */
 
-const STORAGE_KEYS = {
-    MENU: 'restaurant_app_menu_v2', // Versioned to force update
-    ORDERS: 'restaurant_app_orders'
-};
+import { db, collection, getDocs, addDoc, onSnapshot, updateDoc, deleteDoc, doc, query, orderBy } from './firebase-config.js';
 
-const DEFAULT_MENU = [
-    // Meals
+// Default menu to seed if empty
+const DEFAULT_MENU_SEED = [
     {
-        id: crypto.randomUUID(),
         name: '2 Phulka with Chana',
         price: 50,
         category: 'Meals',
@@ -19,7 +15,6 @@ const DEFAULT_MENU = [
         image: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?q=80&w=500&auto=format&fit=crop'
     },
     {
-        id: crypto.randomUUID(),
         name: '5 Phulka with Chana',
         price: 120,
         category: 'Meals',
@@ -28,7 +23,6 @@ const DEFAULT_MENU = [
     },
     // Starters
     {
-        id: crypto.randomUUID(),
         name: 'Hariyali Chicken Tikka [5 Pcs] with Kuboos',
         price: 100,
         category: 'Starters',
@@ -36,7 +30,6 @@ const DEFAULT_MENU = [
         image: 'https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?q=80&w=500&auto=format&fit=crop'
     },
     {
-        id: crypto.randomUUID(),
         name: 'Chicken Tandoori Tikka [5 Pcs] with Kuboos',
         price: 100,
         category: 'Starters',
@@ -44,7 +37,6 @@ const DEFAULT_MENU = [
         image: 'https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?q=80&w=500&auto=format&fit=crop'
     },
     {
-        id: crypto.randomUUID(),
         name: 'Reshmi Chicken Tikka [5 Pcs] with Kuboos',
         price: 100,
         category: 'Starters',
@@ -52,7 +44,6 @@ const DEFAULT_MENU = [
         image: 'https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?q=80&w=500&auto=format&fit=crop'
     },
     {
-        id: crypto.randomUUID(),
         name: 'Chicken 65',
         price: 100,
         category: 'Starters',
@@ -61,7 +52,6 @@ const DEFAULT_MENU = [
     },
     // Biryani
     {
-        id: crypto.randomUUID(),
         name: 'Chicken Plain Biryani',
         price: 130,
         category: 'Biryani',
@@ -69,7 +59,6 @@ const DEFAULT_MENU = [
         image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?q=80&w=500&auto=format&fit=crop'
     },
     {
-        id: crypto.randomUUID(),
         name: '65 Biryani',
         price: 200,
         category: 'Biryani',
@@ -79,52 +68,114 @@ const DEFAULT_MENU = [
 ];
 
 const DataManager = {
-    init() {
-        if (!localStorage.getItem(STORAGE_KEYS.MENU)) {
-            this.saveMenu(DEFAULT_MENU);
+    // Current local cache
+    menuCache: [],
+
+    async init() {
+        console.log("Initializing DataManager...");
+        // Setup real-time listener for Menu
+        // This ensures "everyone should see data lively" applies to menu changes too
+        const menuCol = collection(db, 'menu');
+
+        // Initial check to see if we need to seed data
+        try {
+            const snapshot = await getDocs(menuCol);
+            if (snapshot.empty) {
+                console.log("Seeding default menu to Firestore...");
+                // Note: This might fail if rules only allow "read" but not "write"
+                // So we try/catch specifically the seeding loop to avoid crashing
+                try {
+                    for (const item of DEFAULT_MENU_SEED) {
+                        await addDoc(menuCol, item);
+                    }
+                } catch (seedError) {
+                    console.error("Seeding failed (Permission Issue?):", seedError);
+                    // We don't alert here because we might still be able to READ data
+                }
+            }
+        } catch (e) {
+            console.error("Initial Connection Failed:", e);
+            alert("Database Connection Failed: " + e.message + "\n\nPlease check your Firebase Rules in the Console.");
+            // We don't throw, we let it proceed to onSnapshot which might also fail or work (if rules changed)
         }
+
+        // Return a promise that resolves when we have the initial data
+        return new Promise((resolve) => {
+            onSnapshot(menuCol, (snapshot) => {
+                this.menuCache = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                console.log("Menu updated from Firestore:", this.menuCache);
+
+                // If app/admin is ready, trigger re-render
+                if (window.app && window.app.renderMenu) {
+                    window.app.renderMenu();
+                }
+                if (window.admin && window.admin.renderMenuTable) { // Sync admin view
+                    window.admin.renderMenuTable();
+                }
+                resolve(this.menuCache);
+            }, (error) => {
+                console.error("Firestore Menu Error:", error);
+                alert("Database Error: " + error.message + ". CHECK CONSOLE FOR DETAILS. Did you set Firestore Rules?");
+                resolve([]); // Resolve empty so app doesn't hang
+            });
+        });
     },
 
     getMenu() {
-        return JSON.parse(localStorage.getItem(STORAGE_KEYS.MENU) || '[]');
+        return this.menuCache;
     },
 
-    saveMenu(menu) {
-        localStorage.setItem(STORAGE_KEYS.MENU, JSON.stringify(menu));
+    // CRUD for Menu
+    async addMenuItem(item) {
+        await addDoc(collection(db, 'menu'), item);
     },
 
-    addMenuItem(item) {
-        const menu = this.getMenu();
-        menu.push({ ...item, id: crypto.randomUUID() });
-        this.saveMenu(menu);
+    async updateMenuItem(id, updatedItem) {
+        const docRef = doc(db, 'menu', id);
+        await updateDoc(docRef, updatedItem);
     },
 
-    updateMenuItem(id, updatedItem) {
-        let menu = this.getMenu();
-        menu = menu.map(item => item.id === id ? { ...item, ...updatedItem } : item);
-        this.saveMenu(menu);
+    async deleteMenuItem(id) {
+        const docRef = doc(db, 'menu', id);
+        await deleteDoc(docRef);
     },
 
-    deleteMenuItem(id) {
-        let menu = this.getMenu();
-        menu = menu.filter(item => item.id !== id);
-        this.saveMenu(menu);
-    },
-
-    getOrders() {
-        return JSON.parse(localStorage.getItem(STORAGE_KEYS.ORDERS) || '[]');
-    },
-
-    saveOrder(order) {
-        const orders = this.getOrders();
-        const newOrder = {
-            id: crypto.randomUUID(),
+    // Orders
+    async saveOrder(order) {
+        const orderData = {
             timestamp: new Date().toISOString(),
+            status: 'completed', // or 'pending' if we had a kitchen view
             ...order
         };
-        orders.push(newOrder);
-        localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
-        return newOrder;
+        const docRef = await addDoc(collection(db, 'orders'), orderData);
+        return { id: docRef.id, ...orderData };
+    },
+
+    async getOrders() {
+        // Simple fetch for admin (not real-time, or could be)
+        // For admin sales report, we can just fetch once or use snapshot
+        // We will fetch simple query ordered by time
+        const q = query(collection(db, 'orders'), orderBy('timestamp', 'desc'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+    },
+
+    // Subscribe to orders for Live Sales View
+    subscribeOrders(callback) {
+        const q = query(collection(db, 'orders'), orderBy('timestamp', 'desc'));
+        return onSnapshot(q, (snapshot) => {
+            const orders = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            callback(orders);
+        });
     },
 
     // Helper for formatting currency
@@ -136,5 +187,7 @@ const DataManager = {
     }
 };
 
-// Initialize data if needed
-DataManager.init();
+// Make it global for app.js/admin.js
+window.DataManager = DataManager;
+
+export default DataManager;
