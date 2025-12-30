@@ -74,7 +74,7 @@
 
     <!-- Module type required for firebase imports -->
     <script type="module">
-        import { auth, signInWithEmailAndPassword, onAuthStateChanged } from './firebase-config.js';
+        import { auth, signInWithEmailAndPassword, onAuthStateChanged, setPersistence, browserSessionPersistence } from './firebase-config.js';
 
         // Check if already logged in
         onAuthStateChanged(auth, (user) => {
@@ -105,6 +105,7 @@
                 errorMsg.style.display = 'none';
 
                 // Firebase Login
+                await setPersistence(auth, browserSessionPersistence);
                 await signInWithEmailAndPassword(auth, email, pass);
 
                 // Redirect handled by onAuthStateChanged

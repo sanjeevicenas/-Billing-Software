@@ -21,7 +21,7 @@ const firebaseConfig = {
 // Import Firebase SDKs from CDN (Modular, but using window global for vanilla simplicity or ES modules)
 // We will use ES modules for modern support.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, getDocs, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // Initialize Firebase
@@ -30,4 +30,4 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 // Export for other modules
-export { auth, db, signInWithEmailAndPassword, onAuthStateChanged, signOut, collection, addDoc, getDocs, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy };
+export { auth, db, signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence, collection, addDoc, getDocs, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy };

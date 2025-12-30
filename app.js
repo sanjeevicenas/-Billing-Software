@@ -23,6 +23,13 @@ const app = {
             } else {
                 console.log("User authenticated:", user.email);
 
+                // Update User Display (Show part before @)
+                if (user.email) {
+                    const userName = user.email.split('@')[0];
+                    const userEl = document.getElementById('user-display');
+                    if (userEl) userEl.textContent = userName;
+                }
+
                 // Initialize DataManager only after Auth is confirmed
                 if (window.DataManager && !window.DataManager.initialized) {
                     try {
